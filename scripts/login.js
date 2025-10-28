@@ -3,10 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (loginForm) {
         loginForm.addEventListener('submit', async (event) => {
-            event.preventDefault(); // Impede o formulário de recarregar a página
+            event.preventDefault();
 
             // 1. Pegar os dados dos campos de input
-            // (Usamos 'email' como padrão, já que o backend espera 'email')
             const email = document.getElementById('usuario').value; 
             const senha = document.getElementById('senha').value;
 
@@ -27,20 +26,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // 3. Verificar a resposta do backend
                 if (response.ok) {
-                    // SUCESSO! Login bem-sucedido
-
-                    // 4. Salvar os dados do usuário no navegador (localStorage)
-                    // Isso é MUITO importante para que as outras páginas (dashboard)
-                    // saibam quem está logado.
+                    
                     localStorage.setItem('usuarioLogado', JSON.stringify(data.usuario));
 
-                    // 5. Redirecionar para o dashboard correto com base no TIPO
                     let destination = '';
                     if (data.usuario.tipo === 'ALUNO') {
                         destination = 'dashboard-aluno.html';
                     } else if (data.usuario.tipo === 'PROFESSOR') {
                         destination = 'dashboard-professor.html';
-                    } else if (data.usuario.tipo === 'RESPONSAVEL') { // Assumindo que seu tipo é 'RESPONSAVEL'
+                    } else if (data.usuario.tipo === 'RESPONSAVEL') {
                         destination = 'dashboard-responsavel.html';
                     }
 
