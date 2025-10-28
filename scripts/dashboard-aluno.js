@@ -1,95 +1,131 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    // 1. Pegar os dados do usuário que foram salvos no login
     const usuarioLogadoString = localStorage.getItem('usuarioLogado');
-    
-    // Se não encontrar os dados, redireciona de volta para o login (segurança)
     if (!usuarioLogadoString) {
         console.error('Nenhum usuário logado encontrado. Redirecionando para o login.');
-        window.location.href = '../index.html'; // Ou para a página de login específica
-        return; // Para a execução do script
+        window.location.href = '../index.html';
+        return;
     }
-
-    // Converte a string JSON de volta para um objeto JavaScript
     const usuarioLogado = JSON.parse(usuarioLogadoString);
 
-    // Verifica se o usuário é mesmo um ALUNO
     if (usuarioLogado.tipo !== 'ALUNO') {
         console.error('Usuário logado não é um aluno. Acesso negado.');
-        // Poderia redirecionar para uma página de erro ou login
         alert('Acesso negado. Esta área é apenas para alunos.');
-        localStorage.removeItem('usuarioLogado'); // Limpa o login inválido
+        localStorage.removeItem('usuarioLogado');
         window.location.href = '../index.html';
         return;
     }
 
-    // Temos o usuário logado (ex: { id: 14, nome: "Aluno Teste", ... })
-
-    // 2. Função para buscar os dados ATUAIS do aluno no backend
     async function carregarDadosAluno() {
         try {
-            // Monta a URL da API usando o ID do usuário logado
             const urlPontuacao = `http://localhost:3000/usuarios/${usuarioLogado.id}/pontuacao`;
             const urlRanking = `http://localhost:3000/ranking`;
+            // --- NOVO ---
+            const urlDesafios = `http://localhost:3000/api/desafios?alunoId=${usuarioLogado.id}`;
+            // --- FIM NOVO ---
 
-            // Faz as chamadas para o backend ao mesmo tempo
-            const [respostaPontuacao, respostaRanking] = await Promise.all([
+            // Faz as chamadas para o backend
+            const [respostaPontuacao, respostaRanking, respostaDesafios] = await Promise.all([
                 fetch(urlPontuacao),
-                fetch(urlRanking)
+                fetch(urlRanking),
+                // --- NOVO ---
+                fetch(urlDesafios)
+                // --- FIM NOVO ---
             ]);
 
-            // Verifica se as respostas foram OK
-            if (!respostaPontuacao.ok || !respostaRanking.ok) {
-                console.error('Erro ao buscar dados do backend:', respostaPontuacao.status, respostaRanking.status);
+            if (!respostaPontuacao.ok || !respostaRanking.ok || !respostaDesafios.ok) { // <-- Adicionado respostaDesafios.ok
+                console.error('Erro ao buscar dados do backend:', respostaPontuacao.status, respostaRanking.status, respostaDesafios.status);
                 alert('Erro ao carregar os dados do dashboard. Tente recarregar a página.');
                 return;
             }
 
-            // Pega os dados JSON das respostas
-            const dadosPontuacao = await respostaPontuacao.json(); // Ex: { id: "14", nome: "Aluno Teste", pontuacao_total: 0 }
-            const dadosRanking = await respostaRanking.json();     // Ex: { ranking: [ { id: 2, ... }, { id: 1, ... } ] }
+            const dadosPontuacao = await respostaPontuacao.json();
+            const dadosRanking = await respostaRanking.json();
+            // --- NOVO ---
+            const dadosDesafios = await respostaDesafios.json(); // Ex: { desafios: [ { id: 1, titulo: ... }, ... ] }
+            // --- FIM NOVO ---
 
-            // 3. Preencher a tela com os dados REAIS do backend
+
+            // Preenche os dados básicos (Nome, Pontuação, Ranking)
             document.getElementById('saudacao-aluno').textContent = `Olá, ${dadosPontuacao.nome}!`;
             document.getElementById('pontuacao-valor').textContent = dadosPontuacao.pontuacao_total;
-
-            // Encontrar a posição do aluno no ranking
             const minhaPosicao = dadosRanking.ranking.findIndex(aluno => aluno.id === usuarioLogado.id) + 1;
             const totalAlunos = dadosRanking.ranking.length;
-
             if (minhaPosicao > 0) {
                 document.getElementById('ranking-valor').textContent = `#${minhaPosicao}`;
                 document.getElementById('ranking-total').textContent = `de ${totalAlunos} alunos`;
             } else {
-                document.getElementById('ranking-valor').textContent = `N/A`; // Caso não encontre no ranking
+                document.getElementById('ranking-valor').textContent = `N/A`;
                 document.getElementById('ranking-total').textContent = `de ${totalAlunos} alunos`;
             }
+            document.getElementById('presenca-valor').textContent = `...%`; // Placeholder
 
-            // ---- NOTAS IMPORTANTES ----
-            // Presença: Seu backend atual NÃO tem uma rota para buscar a % de presença.
-            // Vamos deixar um valor fixo ou '...' por enquanto.
-            document.getElementById('presenca-valor').textContent = `...%`; // <-- Placeholder
 
-            // Meta Mensal, Histórico de Presença, Atividades:
-            // Esses dados também NÃO vêm do backend atual.
-            // O código original preenchia com dados fake. Vamos mantê-los assim por enquanto
-            // ou comentar/remover essas seções se preferir simplificar.
-            // (O código abaixo mantém a lógica fake original para essas partes)
+            // --- NOVO: Preenche a lista de desafios ---
+            preencherAtividadesDisponiveis(dadosDesafios.desafios);
+            // --- FIM NOVO ---
 
-            // --- Código FAKE para Meta Mensal (Exemplo) ---
-            const metaPontos = 1500; // Valor fixo
+            // --- Código FAKE para Meta Mensal (Mantido) ---
+            const metaPontos = 1500;
             const progressoMeta = Math.round((dadosPontuacao.pontuacao_total / metaPontos) * 100);
             document.querySelector('.progress-info span:nth-child(2)').textContent = `${dadosPontuacao.pontuacao_total} / ${metaPontos} pontos`;
-            document.querySelector('.progress-bar').style.width = `${Math.min(progressoMeta, 100)}%`; // Não passa de 100%
+            document.querySelector('.progress-bar').style.width = `${Math.min(progressoMeta, 100)}%`;
             document.querySelector('.meta-description').textContent = `Você está a ${Math.max(0, metaPontos - dadosPontuacao.pontuacao_total)} pontos de atingir sua meta!`;
 
-            // Histórico de Presença e Atividades continuam como estavam no HTML original
+            // Histórico de Presença continua como estava no HTML original
 
         } catch (error) {
             console.error('Erro ao carregar os dados do aluno:', error);
             alert('Erro de conexão ao carregar os dados do dashboard.');
         }
     }
+
+    // --- NOVA FUNÇÃO para preencher os desafios ---
+    function preencherAtividadesDisponiveis(desafios) {
+        const activitiesGrid = document.querySelector('.activities-grid');
+        if (!activitiesGrid) return; // Sai se não encontrar o elemento
+
+        activitiesGrid.innerHTML = ''; // Limpa os cards antigos (fake)
+
+        if (!desafios || desafios.length === 0) {
+            activitiesGrid.innerHTML = '<p>Nenhum desafio disponível no momento.</p>';
+            return;
+        }
+
+        desafios.forEach(desafio => {
+            const card = document.createElement('div');
+            card.className = 'activity-card';
+            // Adiciona classe 'concluded' se o status for 'concluido' ou 'atrasado'
+            if (desafio.status === 'concluido' || desafio.status === 'atrasado') {
+                 card.classList.add('concluded');
+            }
+
+            // Define o conteúdo do card
+            card.innerHTML = `
+                <div>
+                    <h4>${desafio.titulo}</h4>
+                    <p>${desafio.descricao || 'Sem descrição'}</p> 
+                </div>
+                ${desafio.status === 'pendente' ? `<div class="activity-points">${desafio.pontos} pts</div>` : ''}
+                ${desafio.status === 'pendente' ? `<button class="btn btn-primary btn-small" data-aluno-desafio-id="${desafio.aluno_desafio_id}">Marcar como Concluído</button>` : `<div class="activity-status">Status: ${desafio.status}</div>`}
+            `;
+            // Nota: O botão "Marcar como Concluído" ainda não faz nada.
+            // Precisaríamos adicionar um EventListener nele para chamar uma nova rota no backend.
+
+            activitiesGrid.appendChild(card);
+        });
+
+        // Adicionar lógica para os botões "Marcar como Concluído" (Exemplo)
+        activitiesGrid.querySelectorAll('.btn-primary').forEach(button => {
+            button.addEventListener('click', (event) => {
+                const alunoDesafioId = event.target.dataset.alunoDesafioId;
+                console.log(`Clicou em concluir desafio ID (aluno_desafios): ${alunoDesafioId}`);
+                alert(`Funcionalidade "Concluir Desafio" ainda não implementada no backend.`);
+                // Aqui chamaria a API: fetch(`/api/alunos/${usuarioLogado.id}/desafios/${alunoDesafioId}/completar`, { method: 'POST', ... })
+            });
+        });
+    }
+    // --- FIM DA NOVA FUNÇÃO ---
 
     // Chama a função para carregar os dados quando a página carregar
     carregarDadosAluno();
